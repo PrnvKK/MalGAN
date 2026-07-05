@@ -30,15 +30,7 @@ import GAN_Files.cnn_arch as cnn_arch
 import GAN_Files.gan_arch as gan_arch # Import your architecture script
 from GAN_Files.load_balanced_data import create_balanced_subset # Import your data loader
 
-# --- INITIALIZE THE MISSING FUNCTIONS ---
-# This pulls the actual logic into the current script's scope
-generator = gan_arch.build_generator(latent_dim=100, num_classes=6)
-discriminator = gan_arch.build_discriminator(img_shape=(64, 64, 3), num_classes=6)
-
 from GAN_Files.gan_arch import build_generator, build_discriminator
-
-# Now when the script hits line 83, it will know what build_generator is
-generator = build_generator(latent_dim=LATENT_DIM, num_classes=NUM_CLASSES)
 
 # --- INITIALIZE VARIABLES ---
 # This pulls X_train and subset_class_names into this script's memory
@@ -74,13 +66,13 @@ GAN_CONFIG = {
     'checkpoint_interval': 10,
     'label_smoothing': True,
     'smooth_real': 0.9,
-    'smooth_fake': 0.0,
+    'smooth_fake': 0.1,
     'd_target_acc_min': 0.65,
     'd_target_acc_max': 0.80,
     'running_avg_window': 10,  # For batch-level monitoring
     'initial_lr': 0.0002,
-    'lr_decay_epochs': 50,  # Start decay after this epoch
-    'min_lr': 0.00001,
+    'lr_decay_epochs': 200,  # Start decay after this epoch
+    'min_lr': 0.00002,
 }
 
 print(f"\nTraining Configuration:")
@@ -94,17 +86,19 @@ print("\n" + "="*80)
 print("REBUILDING MODELS WITH GRADIENT CLIPPING")
 print("="*80)
 
-# Rebuild generator
+# Rebuild generator and discriminator
 generator = build_generator(latent_dim=LATENT_DIM, num_classes=NUM_CLASSES)
 print("✓ Generator rebuilt")
 
-# Rebuild GAN with gradient clipping
+discriminator = build_discriminator(img_shape=IMG_SHAPE, num_classes=NUM_CLASSES)
+print("✓ Discriminator rebuilt")
+
 discriminator.compile(
-    optimizer=Adam(learning_rate=GAN_CONFIG['initial_lr'], beta_1=0.5, clipnorm=1.0),
+    optimizer=Adam(learning_rate=GAN_CONFIG['initial_lr'], beta_1=0.5, clipnorm=5.0),
     loss='binary_crossentropy',
     metrics=['accuracy']
 )
-print("✓ Discriminator compiled with gradient clipping")
+print("✓ Discriminator compiled with gradient clipping (clipnorm=5.0)")
 
 discriminator.trainable = False
 noise_input = layers.Input(shape=(LATENT_DIM,), name='gan_noise_input')
@@ -114,11 +108,11 @@ validity = discriminator([generated_image, label_input])
 
 gan = models.Model([noise_input, label_input], validity, name='GAN')
 gan.compile(
-    optimizer=Adam(learning_rate=GAN_CONFIG['initial_lr'], beta_1=0.5, clipnorm=1.0),
+    optimizer=Adam(learning_rate=GAN_CONFIG['initial_lr'], beta_1=0.5, clipnorm=5.0),
     loss='binary_crossentropy'
 )
 discriminator.trainable = True
-print("✓ GAN compiled with gradient clipping")
+print("✓ GAN compiled with gradient clipping (clipnorm=5.0)")
 
 # ============================================
 # HELPER FUNCTIONS - OPTIMIZED
@@ -437,7 +431,7 @@ for epoch in range(epochs):
           gen_labels = tf.convert_to_tensor(gen_labels, dtype=tf.int32)
 
           # Generator wants discriminator to output "real"
-          valid_y = get_real_labels(batch_size_actual, smooth=False)
+          valid_y = get_real_labels(batch_size_actual, smooth=True)
 
           # Train generator
           g_loss = gan.train_on_batch([noise, gen_labels], valid_y)

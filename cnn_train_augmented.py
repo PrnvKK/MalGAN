@@ -233,8 +233,9 @@ callbacks = [
         verbose=0
     ),
     EarlyStopping(
-        monitor='val_loss',
+        monitor='val_accuracy',
         patience=10,
+        mode='max',
         restore_best_weights=True,
         verbose=0
     ),
@@ -279,6 +280,8 @@ with open(history_path, 'w') as f:
     json.dump(history_dict, f, indent=2)
 
 print(f"\n✓ Training history saved to: {history_path}")
+
+baseline_model.save(checkpoint_path)
 print(f"✓ Best model saved to: {checkpoint_path}")
 
 # Final evaluation on validation set
