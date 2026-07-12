@@ -5,9 +5,9 @@ import os
 import sys
 
 # Ensure the module can find your other scripts if they are in a specific folder
-# sys.path.append('/content/GAN_Files') 
+# sys.path.append('/content/MalGAN') 
 
-import GAN_Files.load_balanced_data as load_balanced_data
+import MalGAN.load_balanced_data as load_balanced_data
 
 # Retrieve variables from previous steps
 # This re-runs the subset logic to ensure names and paths are consistent
@@ -139,11 +139,13 @@ def build_discriminator(img_shape=(64, 64, 3), num_classes=6):
 
     # 2. Downsample 32 -> 16
     x = layers.Conv2D(128, (4, 4), strides=(2, 2), padding='same')(x)
+    x = layers.BatchNormalization()(x)
     x = layers.LeakyReLU(negative_slope=0.2)(x)
     x = layers.Dropout(0.3)(x)
 
     # 3. Downsample 16 -> 8
     x = layers.Conv2D(256, (4, 4), strides=(2, 2), padding='same')(x)
+    x = layers.BatchNormalization()(x)
     x = layers.LeakyReLU(negative_slope=0.2)(x)
     x = layers.Dropout(0.3)(x)
 

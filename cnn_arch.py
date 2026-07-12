@@ -5,7 +5,7 @@ from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping, ReduceLROnPlateau
 
 # Import the previous module
-import GAN_Files.load_balanced_data as load_balanced_data
+import MalGAN.load_balanced_data as load_balanced_data
 
 # ============================================
 # CONFIGURATION & DATA LOADING

@@ -10,8 +10,8 @@ import os
 from IPython.display import clear_output
 
 # --- NEW: IMPORT YOUR MODULES ---
-import GAN_Files.cnn_arch as cnn_arch
-import GAN_Files.load_balanced_data as load_balanced_data
+import MalGAN.cnn_arch as cnn_arch
+import MalGAN.load_balanced_data as load_balanced_data
 
 # --- NEW: INITIALIZE DATA AND MODEL ---
 # This pulls the variables into the current script's scope
@@ -142,8 +142,9 @@ callbacks = [
         verbose=0  # Silence default messages
     ),
     EarlyStopping(
-        monitor='val_loss',
+        monitor='val_accuracy',
         patience=10,
+        mode='max',
         restore_best_weights=True,
         verbose=0
     ),
@@ -188,6 +189,8 @@ with open(history_path, 'w') as f:
     json.dump(history_dict, f, indent=2)
 
 print(f"\n✓ Training history saved to: {history_path}")
+
+baseline_model.save(checkpoint_path)
 print(f"✓ Best model saved to: {checkpoint_path}")
 
 # Final evaluation on validation set

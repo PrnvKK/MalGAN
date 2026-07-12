@@ -1,7 +1,8 @@
+import os
 import numpy as np
 import matplotlib.pyplot as plt
 import gc
-import GAN_Files.load_data as load_data  # Import the first script
+import MalGAN.load_data as load_data  # Import the first script
 
 def create_balanced_subset():
     # 1. Fetch data from the load_data module
@@ -9,6 +10,7 @@ def create_balanced_subset():
     X_train_full, y_train_full, X_val_full, y_val_full, class_names = load_data.get_full_dataset()
     
     PROJECT_DIR = '/content/drive/MyDrive/GAN_Malware_Detection'
+    os.makedirs(PROJECT_DIR, exist_ok=True)
     
     print("="*60)
     print("CREATING SUBSET FROM FULL DATASET")
