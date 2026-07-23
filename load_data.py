@@ -1,74 +1,106 @@
+"""
+MalGAN -- Dataset Loader
+=========================
+Reads the MaleVis malware image dataset (pre-split into train/val folders)
+and returns NumPy arrays of images and integer labels.
+"""
+
 import numpy as np
 import cv2
 from tqdm import tqdm
 from pathlib import Path
-import matplotlib.pyplot as plt
+import sys
 
-def load_malevis_presplit(base_path, img_size=(224, 224)):
+from config import MALEVIS_DATA_DIR, CNN_IMG_SIZE
+
+
+def load_malevis_presplit(base_path=None, img_size=None):
     """
-    Core logic for loading MaleVis dataset.
+    Load the MaleVis dataset from a pre-split directory structure.
+
+    Expected layout::
+
+        base_path/
+            train/
+                Androm/   (*.png, *.jpg)
+                Elex/
+                ...
+            val/
+                Androm/
+                ...
+
+    Parameters
+    ----------
+    base_path : str or Path, optional
+        Root directory containing ``train/`` and ``val/`` subfolders.
+        Defaults to ``MALEVIS_DATA_DIR`` from config.
+    img_size : tuple, optional
+        Target ``(height, width)`` for loaded images.
+        Defaults to ``CNN_IMG_SIZE`` from config.
+
+    Returns
+    -------
+    X_train : np.ndarray  (N, H, W, 3)
+    y_train : np.ndarray  (N,)
+    X_val   : np.ndarray
+    y_val   : np.ndarray
+    class_names : list[str]
     """
-    base_path = Path(base_path)
-    X_train_list, y_train_list = [], []
-    X_val_list, y_val_list = [], []
-    
-    train_dir = base_path / 'train'
-    val_dir = base_path / 'val'
+    base_path = Path(base_path or MALEVIS_DATA_DIR)
+    img_size = img_size or CNN_IMG_SIZE
+
+    train_dir = base_path / "train"
+    val_dir = base_path / "val"
 
     if not train_dir.exists():
-        possible_dirs = list(base_path.rglob("train"))
-        if possible_dirs:
-            train_dir = possible_dirs[0]
-            val_dir = train_dir.parent / 'val'
+        possible = list(base_path.rglob("train"))
+        if possible:
+            train_dir = possible[0]
+            val_dir = train_dir.parent / "val"
+        else:
+            raise FileNotFoundError(
+                f"Train directory not found under {base_path}. "
+                "Set MALEVIS_DATA_DIR env variable to the correct path."
+            )
 
     class_dirs = sorted([d for d in train_dir.iterdir() if d.is_dir()])
     class_names = [d.name for d in class_dirs]
 
-    # Load training data
-    for idx, class_dir in enumerate(class_dirs):
-        image_files = list(class_dir.glob("*.png")) + list(class_dir.glob("*.jpg"))
-        for img_path in tqdm(image_files, desc=f"  Loading {class_dir.name}", leave=False):
-            try:
-                img = cv2.imread(str(img_path))
-                if img is None: continue
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img = cv2.resize(img, img_size)
-                X_train_list.append(img)
-                y_train_list.append(idx)
-            except Exception: continue
+    def _load_split(split_dir):
+        X_list, y_list = [], []
+        split_class_dirs = sorted([d for d in split_dir.iterdir() if d.is_dir()])
+        for idx, class_dir in enumerate(split_class_dirs):
+            image_files = list(class_dir.glob("*.png")) + list(class_dir.glob("*.jpg"))
+            for img_path in tqdm(image_files, desc=f"  {class_dir.name}", leave=False):
+                try:
+                    img = cv2.imread(str(img_path))
+                    if img is None:
+                        continue
+                    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    img = cv2.resize(img, img_size)
+                    X_list.append(img)
+                    y_list.append(idx)
+                except Exception:
+                    continue
+        return np.array(X_list), np.array(y_list)
 
-    # Load validation data
-    val_class_dirs = sorted([d for d in val_dir.iterdir() if d.is_dir()])
-    for idx, class_dir in enumerate(val_class_dirs):
-        image_files = list(class_dir.glob("*.png")) + list(class_dir.glob("*.jpg"))
-        for img_path in tqdm(image_files, desc=f"  Loading {class_dir.name}", leave=False):
-            try:
-                img = cv2.imread(str(img_path))
-                if img is None: continue
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                img = cv2.resize(img, img_size)
-                X_val_list.append(img)
-                y_val_list.append(idx)
-            except Exception: continue
+    print(f"Loading training data from {train_dir} ...")
+    X_train, y_train = _load_split(train_dir)
+    print(f"Loading validation data from {val_dir} ...")
+    X_val, y_val = _load_split(val_dir)
 
-    return np.array(X_train_list), np.array(y_train_list), \
-           np.array(X_val_list), np.array(y_val_list), class_names
+    return X_train, y_train, X_val, y_val, class_names
 
-def get_full_dataset():
-    """
-    Convenience wrapper to call with default paths.
-    """
-    DATA_DIR = "/content/malevis_data/malevis_train_val_300x300"
-    IMG_SIZE = (224, 224)
-    return load_malevis_presplit(DATA_DIR, img_size=IMG_SIZE)
 
-# This block ONLY runs if you do: python -m load_data
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
-    print("="*60)
-    print("EXECUTING LOAD_DATA DIRECTLY")
-    print("="*60)
-    
-    X_train_full, y_train_full, X_val_full, y_val_full, class_names = get_full_dataset()
-    
-    print(f"Training set: {X_train_full.shape}")
+    print("=" * 60)
+    print("MALGAN -- DATASET LOADER TEST")
+    print("=" * 60)
+
+    X_train_full, y_train_full, X_val_full, y_val_full, class_names = \
+        load_malevis_presplit()
+
+    print(f"\nTraining set:   {X_train_full.shape}")
     print(f"Validation set: {X_val_full.shape}")
+    print(f"Classes:        {len(class_names)}")

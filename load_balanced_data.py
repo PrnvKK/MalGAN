@@ -1,78 +1,101 @@
-import os
+"""
+MalGAN -- Balanced Subset Creator
+==================================
+Selects a balanced subset of the MaleVis dataset containing only the target
+malware families required for this experiment.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import gc
-import MalGAN.load_data as load_data  # Import the first script
 
-def create_balanced_subset():
-    # 1. Fetch data from the load_data module
-    print("Requesting full dataset from load_data...")
-    X_train_full, y_train_full, X_val_full, y_val_full, class_names = load_data.get_full_dataset()
-    
-    PROJECT_DIR = '/content/drive/MyDrive/GAN_Malware_Detection'
-    os.makedirs(PROJECT_DIR, exist_ok=True)
-    
-    print("="*60)
-    print("CREATING SUBSET FROM FULL DATASET")
-    print("="*60 + "\n")
+from load_data import load_malevis_presplit
+from config import SELECTED_FAMILIES, OUTPUT_DIR, ensure_dir
 
-    SELECTED_FAMILIES = ['Androm', 'Elex', 'Expiro', 'HackKMS', 'Hlux', 'Sality']
 
-    selected_train_indices = []
-    selected_val_indices = []
-    selected_class_mapping = {}
-    subset_class_names = []
+def create_balanced_subset(selected_families=None):
+    """
+    Load the full MaleVis dataset then filter to the requested families.
 
-    new_class_idx = 0
-    for family_name in SELECTED_FAMILIES:
-        if family_name in class_names:
-            old_idx = class_names.index(family_name)
-            selected_class_mapping[old_idx] = new_class_idx
+    Parameters
+    ----------
+    selected_families : list[str], optional
+        Subset of class names to keep.  Defaults to ``SELECTED_FAMILIES``
+        from config.
 
-            train_mask = (y_train_full == old_idx)
-            selected_train_indices.extend(np.where(train_mask)[0])
+    Returns
+    -------
+    X_train : np.ndarray  (N, 224, 224, 3)
+    y_train : np.ndarray  (N,)  -- remapped 0..k-1
+    X_val   : np.ndarray
+    y_val   : np.ndarray
+    subset_class_names : list[str]
+    """
+    selected_families = selected_families or SELECTED_FAMILIES
 
-            val_mask = (y_val_full == old_idx)
-            selected_val_indices.extend(np.where(val_mask)[0])
+    print("Requesting full dataset ...")
+    X_train_full, y_train_full, X_val_full, y_val_full, class_names = \
+        load_malevis_presplit()
 
-            subset_class_names.append(family_name)
-            new_class_idx += 1
+    print("=" * 60)
+    print("CREATING BALANCED SUBSET")
+    print("=" * 60)
+
+    selected_train_idx = []
+    selected_val_idx = []
+    class_mapping = {}
+    subset_names = []
+
+    new_idx = 0
+    for family in selected_families:
+        if family in class_names:
+            old_idx = class_names.index(family)
+            class_mapping[old_idx] = new_idx
+
+            selected_train_idx.extend(np.where(y_train_full == old_idx)[0])
+            selected_val_idx.extend(np.where(y_val_full == old_idx)[0])
+            subset_names.append(family)
+            new_idx += 1
         else:
-            print(f"  WARNING: {family_name} not found!")
+            print(f"  WARNING: '{family}' not found in dataset -- skipping")
 
-    # Create subset arrays
-    X_train = X_train_full[np.array(selected_train_indices)]
-    y_train_old = y_train_full[np.array(selected_train_indices)]
-    X_val = X_val_full[np.array(selected_val_indices)]
-    y_val_old = y_val_full[np.array(selected_val_indices)]
+    X_train = X_train_full[np.array(selected_train_idx)]
+    y_train_old = y_train_full[np.array(selected_train_idx)]
+    X_val = X_val_full[np.array(selected_val_idx)]
+    y_val_old = y_val_full[np.array(selected_val_idx)]
 
-    # Remap labels
-    y_train = np.array([selected_class_mapping[old_label] for old_label in y_train_old])
-    y_val = np.array([selected_class_mapping[old_label] for old_label in y_val_old])
+    y_train = np.array([class_mapping[old] for old in y_train_old])
+    y_val = np.array([class_mapping[old] for old in y_val_old])
 
-    print(f"Subset Training set: {X_train.shape}")
+    print(f"Subset training set:   {X_train.shape}")
+    print(f"Subset validation set: {X_val.shape}")
+    print(f"Classes:               {subset_names}")
 
-    # Visualization
+    # -- Visualise one sample per class ------------------------------------
     fig, axes = plt.subplots(2, 3, figsize=(12, 8))
     axes = axes.flatten()
-    for i in range(len(subset_class_names)):
-        class_indices = np.where(y_train == i)[0]
-        if len(class_indices) > 0:
-            sample_idx = class_indices[0]
-            axes[i].imshow(X_train[sample_idx])
-            axes[i].set_title(f"{subset_class_names[i]}", fontsize=10)
-        axes[i].axis('off')
+    for i in range(len(subset_names)):
+        class_idx = np.where(y_train == i)[0]
+        if len(class_idx) > 0:
+            axes[i].imshow(X_train[class_idx[0]])
+            axes[i].set_title(subset_names[i], fontsize=10)
+        axes[i].axis("off")
 
     plt.tight_layout()
-    plt.savefig(f'{PROJECT_DIR}/subset_samples.png', dpi=150)
+    out_dir = ensure_dir(OUTPUT_DIR)
+    plot_path = out_dir / "subset_samples.png"
+    plt.savefig(plot_path, dpi=150)
     plt.show()
+    print(f"Sample grid saved to {plot_path}")
 
-    # Clean up memory
+    # Free memory
     del X_train_full, y_train_full, X_val_full, y_val_full
     gc.collect()
-    
-    return X_train, y_train, X_val, y_val, subset_class_names
 
+    return X_train, y_train, X_val, y_val, subset_names
+
+
+# ---------------------------------------------------------------------------
 if __name__ == "__main__":
     X_train, y_train, X_val, y_val, subset_class_names = create_balanced_subset()
-    print("\n✓ Subset ready for training!")
+    print("\nSubset ready for training.")
